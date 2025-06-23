@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css" integrity="sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu" crossorigin="anonymous">
+
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap-theme.min.css" integrity="sha384-6pzBo3FDv/PJ8r2KRkGHifhEocL+1X2rVCTTkUfGk7/0pbek5mMa1upzvWbrUbOZ" crossorigin="anonymous">
+
+    <!-- Latest compiled and minified JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/js/bootstrap.min.js" integrity="sha384-aJ21OjlMXNL5UyIl/XNwTMqvzeRMZH2w8c5cRVpzpU8Y5bApTppSuUkhZXN0VxHd" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@5.0.0/bundles/stomp.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script>
+        function setConnected(){
+            $("#connect").hide();
+            $("#disconnect").show();
+        }
+        //
+        function connect(){
+            var socket = new SocketJS("/chat");
+            stompClient = Stomp.over(socket);
+            stompClient = stompClient.connect({}, function(frame){
+                console.log('Connected: ' + frame);
+                stompClient.subscribe('/topic/messages', function(message){
+                    console.log(message.body);
+                    $("#chat").append("<div>" + message.body + "</div>");
+                });
+            });
+        }
+
+        function showMessage(message){
+            var chat = document.getElementById('chat');
+            var messageElement = document.createElement('div');
+            messageElement.textContent = message.sender + ": " + message.content;
+            messageElement.class = "border-bottom mb-1";
+            chat.appendChild(messageElement);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        //
+        function sendMessage(){
+            var sender = document.getElementById('senderInput').value;
+            var context = document.getElementById('messageInput').value;
+            var chatMessage = {
+                sender: sender,
+                content: context
+            }
+            stompClient.send("/app/sendMessage", {}, JSON.stringify(chatMessage));
+        }
+        //when we load this page
+        document.getElementById('sendMessage').onCLick = sendMessage;
+        window.onload = connect;
+    </script>
+</head>
+<body>
+    <div>
+        <h1>Testing chat application</h1>
+        <div id="chat" class="border rounded p-3 mb-3"
+        style=" height: 400px; overflow-y: scroll;">
+        </div>
+        <div class="input-group mb-3">
+            <input type="text" class="form-control" id="username" placeholder="Enter username">
+            <span class="input-group-btn">
+                <button class="btn btn-default" type="button" onclick="connect()">Connect</button>
+            </span>
+        </div>
+        <div class="form-group">
+            <input type="text" class="form-control" id="messageInput" placeholder="Enter message..">
+            <div id="intput-group-append">
+                <button class="btn btn-primary" type="button" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+
+</body>
+</html>
