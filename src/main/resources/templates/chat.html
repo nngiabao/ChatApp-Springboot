@@ -2,79 +2,152 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>STOMP Chat App</title>
     <!-- Latest compiled and minified CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css" integrity="sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css"
+          integrity="sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu" crossorigin="anonymous">
 
     <!-- Optional theme -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap-theme.min.css" integrity="sha384-6pzBo3FDv/PJ8r2KRkGHifhEocL+1X2rVCTTkUfGk7/0pbek5mMa1upzvWbrUbOZ" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap-theme.min.css"
+          integrity="sha384-6pzBo3FDv/PJ8r2KRkGHifhEocL+1X2rVCTTkUfGk7/0pbek5mMa1upzvWbrUbOZ" crossorigin="anonymous">
 
-    <!-- Latest compiled and minified JavaScript -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/js/bootstrap.min.js" integrity="sha384-aJ21OjlMXNL5UyIl/XNwTMqvzeRMZH2w8c5cRVpzpU8Y5bApTppSuUkhZXN0VxHd" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@5.0.0/bundles/stomp.umd.min.js"></script>
+    <!-- SockJS and STOMP libraries -->
     <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
     <script>
-        //connected function
-        function setConnected(){
-            document.getElementById('connect').disabled = != connected;
+        var stompClient = null;
+
+        function setConnected(connected) {
+            document.getElementById('connect').disabled = connected;
+            document.getElementById('disconnect').disabled = !connected;
+            document.getElementById('sendMessage').disabled = !connected;
         }
-        //
-        function connect(){
-            var socket = new SocketJS("/chat");
+
+        function connect() {
+            var socket = new SockJS('/chat');
             stompClient = Stomp.over(socket);
-            stompClient = stompClient.connect({}, function(frame){
+            
+            stompClient.connect({}, function (frame) {
                 setConnected(true);
-                stompClient.subscribe('/topic/messages', function(message){
-                    showMessage( JSON.parse(message.body));
+                console.log('Connected: ' + frame);
+                showStatus('Connected to chat server!', 'success');
+                
+                stompClient.subscribe('/topic/message', function (message) {
+                    showMessage(JSON.parse(message.body));
                 });
+            }, function(error) {
+                console.error('STOMP error:', error);
+                showStatus('Connection failed', 'danger');
             });
         }
 
-        function showMessage(message){
+        function disconnect() {
+            if (stompClient !== null) {
+                stompClient.disconnect();
+            }
+            setConnected(false);
+            console.log("Disconnected");
+            showStatus('Disconnected from chat server', 'warning');
+        }
+
+        function showMessage(message) {
             var chat = document.getElementById('chat');
             var messageElement = document.createElement('div');
-            messageElement.textContent = message.sender + ": " + message.content;
-            messageElement.class = "border-bottom mb-1";
+            messageElement.className = "border-bottom mb-1 p-2";
+            
+            var time = new Date().toLocaleTimeString();
+            messageElement.innerHTML = '<strong>' + message.sender + '</strong> <small class="text-muted">(' + time + ')</small><br>' + message.message;
+            
             chat.appendChild(messageElement);
             chat.scrollTop = chat.scrollHeight;
         }
 
-        //
-        function sendMessage(){
-            var sender = document.getElementById('senderInput').value;
-            var context = document.getElementById('messageInput').value;
-            var chatMessage = {
-                sender: sender,
-                content: context
-            }
-            stompClient.send("/app/sendMessage", {}, JSON.stringify(chatMessage));
-            document.getElementById('messageInput').value = "";
+        function showStatus(message, type) {
+            var statusDiv = document.getElementById('status');
+            statusDiv.className = 'alert alert-' + type;
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+            
+            // Auto-hide after 3 seconds
+            setTimeout(function() {
+                statusDiv.style.display = 'none';
+            }, 3000);
         }
-        //when we load this page
-        document.getElementById('sendMessage').onCLick = sendMessage;
-        window.onload = connect;
+
+        function sendMessage() {
+            var sender = document.getElementById('senderInput').value.trim();
+            var messageContent = document.getElementById('messageInput').value.trim();
+            
+            if (!sender) {
+                alert('Please enter your username');
+                return;
+            }
+            
+            if (!messageContent) {
+                alert('Please enter a message');
+                return;
+            }
+            
+            if (stompClient && stompClient.connected) {
+                var chatMessage = {
+                    sender: sender,
+                    message: messageContent,
+                    timestamp: new Date().toISOString()
+                };
+                
+                stompClient.send("/app/sendMessage", {}, JSON.stringify(chatMessage));
+                document.getElementById('messageInput').value = "";
+            } else {
+                alert('Not connected to chat server. Please connect first.');
+            }
+        }
+
+        window.onload = function() {
+            setConnected(false);
+            document.getElementById('connect').onclick = connect;
+            document.getElementById('disconnect').onclick = disconnect;
+            document.getElementById('sendMessage').onclick = sendMessage;
+            
+            document.getElementById('messageInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+        };
     </script>
 </head>
 <body>
-    <div>
-        <h1>Testing chat application</h1>
-        <div id="chat" class="border rounded p-3 mb-3"
-        style=" height: 400px; overflow-y: scroll;">
-        </div>
-        <div class="input-group mb-3">
-            <input type="text" class="form-control" id="username" placeholder="Enter username">
-            <span class="input-group-btn">
-                <button class="btn btn-default" type="button" onclick="connect()">Connect</button>
-            </span>
-        </div>
-        <div class="form-group">
-            <input type="text" class="form-control" id="messageInput" placeholder="Enter message..">
-            <div id="intput-group-append">
-                <button class="btn btn-primary" type="button" onclick="sendMessage()">Send</button>
-            </div>
+<div class="container mt-4">
+    <h1 class="text-center">STOMP Chat Application</h1>
+    
+    <!-- Status message -->
+    <div id="status" class="alert" style="display: none;"></div>
+    
+    <!-- Chat area -->
+    <div id="chat" class="border rounded p-3 mb-3" style="height: 400px; overflow-y: auto; background-color: #f9f9f9;">
+        <div class="text-muted text-center">
+            <em>Welcome to the STOMP chat! Click "Connect" to start chatting.</em>
         </div>
     </div>
-
-
+    
+    <!-- Username input -->
+    <div class="input-group mb-3">
+        <input type="text" class="form-control" id="senderInput" placeholder="Enter your username">
+    </div>
+    
+    <!-- Message input -->
+    <div class="input-group mb-3">
+        <input type="text" class="form-control" id="messageInput" placeholder="Type your message here...">
+        <div class="input-group-append">
+            <button id="sendMessage" class="btn btn-primary" type="button" disabled>Send Message</button>
+        </div>
+    </div>
+    
+    <!-- Connection controls -->
+    <div class="text-center">
+        <button id="connect" class="btn btn-success mr-2">Connect</button>
+        <button id="disconnect" class="btn btn-warning" disabled>Disconnect</button>
+    </div>
+</div>
 </body>
 </html>
